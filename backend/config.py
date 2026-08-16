@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
     STRIPE_SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "sk_test_mock_key")
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "http://localhost:5173,https://online-courses-azure.vercel.app")
+
+    @property
+    def cors_origins(self):
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(',') if origin.strip()]
 
     class Config:
         env_file = ".env"

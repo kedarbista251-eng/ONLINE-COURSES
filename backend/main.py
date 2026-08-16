@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Ensure root directory is in python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from backend.config import settings
 from backend.database import Base, engine
 from backend.routers import auth, courses, enrollments, progress, notes, certificates, admin
 from backend.seed import seed_database
@@ -22,7 +23,7 @@ app = FastAPI(
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
