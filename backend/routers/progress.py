@@ -14,6 +14,16 @@ def get_course_progress(course_id: str, current_user: User = Depends(get_current
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
+    # Enforce active enrollment check
+    from backend.models import Enrollment
+    enrollment = db.query(Enrollment).filter(
+        Enrollment.user_id == current_user.id,
+        Enrollment.course_id == course_id,
+        Enrollment.status == "active"
+    ).first()
+    if not enrollment and current_user.role not in ["admin", "instructor"]:
+        raise HTTPException(status_code=403, detail="You must be enrolled in this course to view progress.")
+
     sections = db.query(Section).filter(Section.course_id == course_id).all()
     section_ids = [s.id for s in sections]
     all_lessons = db.query(Lesson).filter(Lesson.section_id.in_(section_ids)).all() if section_ids else []
@@ -40,6 +50,16 @@ def get_course_progress(course_id: str, current_user: User = Depends(get_current
 
 @router.post("/toggle")
 def toggle_lesson_progress(data: ProgressToggleRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Enforce active enrollment check
+    from backend.models import Enrollment
+    enrollment = db.query(Enrollment).filter(
+        Enrollment.user_id == current_user.id,
+        Enrollment.course_id == data.course_id,
+        Enrollment.status == "active"
+    ).first()
+    if not enrollment and current_user.role not in ["admin", "instructor"]:
+        raise HTTPException(status_code=403, detail="You must be enrolled in this course to track progress.")
+
     record = db.query(Progress).filter(
         Progress.user_id == current_user.id,
         Progress.course_id == data.course_id,

@@ -48,3 +48,31 @@ npm run dev
 # Production Build
 npm run build
 ```
+
+---
+
+## 🛡️ Production Release Gate & Security Hardening (August 2026)
+
+We have executed a comprehensive audit and resolved all critical production readiness issues:
+
+1. **Secure Stripe Checkout Verification**:
+   - Secured the `/api/enrollments/confirm-payment` endpoint by directly querying the Stripe API on the backend with the Checkout `session_id`.
+   - Verified that `payment_status` is `"paid"` and validated the `client_reference_id` to prevent token tampering/replay attacks.
+   - Refactored the frontend React app to automatically catch Stripe success query parameters, request confirmation, remove URL clutter, and open the video player.
+
+2. **Video URL Access Lock**:
+   - Refactored `GET /api/courses/{course_id}` to check the requesting user's authorization. Non-enrolled users and anonymous visitors will receive redacted empty strings for the `video_url` of paid lessons, preventing unauthorized content scraping.
+
+3. **Role & Privilege Separation**:
+   - Created a strict `require_super_admin` permission dependency to separate high-level admin operations (financial stats, instructor creation) from instructors.
+
+4. **Review Spam Prevention**:
+   - Changed the course review submission route to require authentication and active enrollment, blocking competitors or script injections from manipulating ratings.
+
+5. **LMS Feature Access Controls**:
+   - Enforced active enrollment checks before allowing users to track lesson progress, write notes, or generate completion certificates.
+   - Refactored the certificate generator to require **100% course progress** (completing all lessons) before issuing a verified seal.
+
+6. **Solved N+1 SQL Performance Bottlenecks**:
+   - Combined section and lesson fetches inside `get_course_detail` into a single bulk query mapping lessons in memory (reducing queries from `1+N` to exactly `2`).
+   - Replaced in-memory Python calculations on all database enrollment rows with a database-level `func.sum()` join query on `/admin/stats`.

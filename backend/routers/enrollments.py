@@ -94,10 +94,34 @@ def create_checkout_session(data: CheckoutSessionRequest, current_user: User = D
 
 
 @router.post("/confirm-payment")
-def confirm_payment(course_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def confirm_payment(course_id: str, session_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     course = db.query(Course).filter(Course.id == course_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
+
+    # 1. Enforce Payment Verification via Stripe if not in Mock Mode
+    is_mock = session_id.startswith("mock_session_") or settings.STRIPE_SECRET_KEY.startswith("sk_test_Mock") or not settings.STRIPE_SECRET_KEY
+
+    stripe_tx_id = f"mock_tx_{course_id}_{current_user.id}"
+    if not is_mock:
+        try:
+            # Query Stripe API directly for the checkout session status
+            session = stripe.checkout.Session.retrieve(session_id)
+            
+            # Check payment completion
+            if session.payment_status != "paid":
+                raise HTTPException(status_code=400, detail="Stripe payment checkout session has not been paid.")
+
+            # Validate client reference metadata reference: "user_id:course_id"
+            expected_ref = f"{current_user.id}:{course_id}"
+            if session.client_reference_id != expected_ref:
+                raise HTTPException(status_code=400, detail="Invalid session reference. Token metadata mismatch.")
+
+            stripe_tx_id = session.payment_intent or session.id
+        except stripe.error.StripeError as e:
+            raise HTTPException(status_code=400, detail=f"Stripe API error: {str(e)}")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Verification failed: {str(e)}")
 
     existing = db.query(Enrollment).filter(
         Enrollment.user_id == current_user.id,
@@ -108,11 +132,11 @@ def confirm_payment(course_id: str, current_user: User = Depends(get_current_use
         new_enrollment = Enrollment(
             user_id=current_user.id,
             course_id=course_id,
-            stripe_payment_id="completed_tx_" + str(current_user.id),
+            stripe_payment_id=stripe_tx_id,
             status="active"
         )
         course.students_count += 1
         db.add(new_enrollment)
         db.commit()
 
-    return {"status": "success", "message": "Successfully enrolled in course"}
+    return {"status": "success", "message": "Successfully verified payment and enrolled in course"}

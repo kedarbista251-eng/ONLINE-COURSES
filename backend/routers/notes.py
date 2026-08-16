@@ -10,6 +10,16 @@ router = APIRouter(prefix="/notes", tags=["Notes"])
 
 @router.get("/{course_id}/{lesson_id}", response_model=Optional[NoteResponse])
 def get_lesson_note(course_id: str, lesson_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Enforce active enrollment check
+    from backend.models import Enrollment
+    enrollment = db.query(Enrollment).filter(
+        Enrollment.user_id == current_user.id,
+        Enrollment.course_id == course_id,
+        Enrollment.status == "active"
+    ).first()
+    if not enrollment and current_user.role not in ["admin", "instructor"]:
+        raise HTTPException(status_code=403, detail="You must be enrolled in this course to view lesson notes.")
+
     note = db.query(LessonNote).filter(
         LessonNote.user_id == current_user.id,
         LessonNote.course_id == course_id,
@@ -25,6 +35,16 @@ def get_user_notes(current_user: User = Depends(get_current_user), db: Session =
 
 @router.post("/save", response_model=NoteResponse)
 def save_lesson_note(data: NoteSaveRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Enforce active enrollment check
+    from backend.models import Enrollment
+    enrollment = db.query(Enrollment).filter(
+        Enrollment.user_id == current_user.id,
+        Enrollment.course_id == data.course_id,
+        Enrollment.status == "active"
+    ).first()
+    if not enrollment and current_user.role not in ["admin", "instructor"]:
+        raise HTTPException(status_code=403, detail="You must be enrolled in this course to save lesson notes.")
+
     note = db.query(LessonNote).filter(
         LessonNote.user_id == current_user.id,
         LessonNote.course_id == data.course_id,

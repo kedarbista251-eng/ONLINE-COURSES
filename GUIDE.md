@@ -55,25 +55,50 @@ http://localhost:8000/api/health
 
 ## 3. Environment Configuration
 
-The project uses environment variables from `.env`.
+The project uses environment variables from `.env` (local development) or platform configuration panels (production).
 
-Example configuration:
+### Local Development (`.env`)
+
+Create a `.env` file in the project root:
 
 ```env
+# App mode
+APP_ENV=development
+
+# Database Connection (SQLite fallback for local)
 DATABASE_URL=sqlite:///./learni.db
-JWT_SECRET=your_secure_secret
+
+# JWT Configuration
+JWT_SECRET=your_secure_secret_key_here
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
-STRIPE_SECRET_KEY=your_stripe_key
+
+# Stripe Configuration
+STRIPE_SECRET_KEY=sk_test_MockStripeKeyForTestingCourseApp2026
+
+# Backend-to-Frontend URLs
 FRONTEND_URL=http://localhost:5173
+CORS_ORIGINS=http://localhost:5173
+
+# Frontend-to-Backend URL
 VITE_API_URL=http://localhost:8000/api
 ```
 
-### Notes
+### Production Deployment
 
-- For local development, SQLite is the easiest option.
-- For production, use a managed PostgreSQL instance such as Supabase.
-- Keep secrets out of version control.
+#### A. Render (Backend Deployment)
+Configure the following in the Render environment variables tab:
+1. **`APP_ENV`**: Set to `production` (disables SQLite fallback to prevent data loss).
+2. **`DATABASE_URL`**: Your Supabase/PostgreSQL connection string. (If it starts with `postgres://`, the app automatically normalizes it to `postgresql://`).
+3. **`JWT_SECRET`**: A strong secret key generated for production.
+4. **`FRONTEND_URL`**: Set to your Vercel frontend URL (e.g., `https://your-app.vercel.app`).
+5. **`CORS_ORIGINS`**: Set to your Vercel frontend URL (e.g., `https://your-app.vercel.app`) to authorize requests.
+6. **`STRIPE_SECRET_KEY`**: Your live/test Stripe API key.
+
+#### B. Vercel (Frontend Deployment)
+Configure the following in the Vercel project environment variables settings:
+1. **`VITE_API_URL`**: Set to your Render backend API URL with `/api` appended (e.g., `https://your-backend.onrender.com/api`).
+   *Note: Vite requires the `VITE_` prefix to bundle environment variables into the client-side code.*
 
 ## 4. Managing the Database
 

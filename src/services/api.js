@@ -125,8 +125,8 @@ export const api = {
     return handleResponse(res);
   },
 
-  confirmPayment: async (courseId) => {
-    const res = await fetch(`${API_BASE}/enrollments/confirm-payment?course_id=${courseId}`, {
+  confirmPayment: async (courseId, sessionId) => {
+    const res = await fetch(`${API_BASE}/enrollments/confirm-payment?course_id=${courseId}&session_id=${sessionId}`, {
       method: 'POST',
       headers: getAuthHeaders()
     });

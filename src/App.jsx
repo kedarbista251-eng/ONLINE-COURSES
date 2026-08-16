@@ -46,6 +46,46 @@ function MainApp() {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
+  // Detect and process Stripe payment success redirect parameters
+  useEffect(() => {
+    const checkPaymentConfirmation = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const sessionId = params.get('session_id');
+      const courseId = params.get('course_id');
+
+      if (sessionId && courseId) {
+        if (!isAuthenticated) {
+          alert('🔑 Please sign in or register to complete your enrollment verification.');
+          setIsAuthModalOpen(true);
+          return;
+        }
+
+        try {
+          await api.confirmPayment(courseId, sessionId);
+          alert('🎉 Payment verified successfully! You have been enrolled in the course.');
+          
+          // Clean URL parameters from browser history
+          const newUrl = window.location.pathname;
+          window.history.replaceState({}, document.title, newUrl);
+          
+          // Open player automatically
+          setActivePlayerCourseId(courseId);
+          setActivePlayerLessonId(null);
+          
+          // Refresh courses
+          fetchCourses();
+        } catch (err) {
+          console.error("Payment verification error:", err);
+          alert('❌ Payment verification failed: ' + (err.message || 'Unknown error'));
+          const newUrl = window.location.pathname;
+          window.history.replaceState({}, document.title, newUrl);
+        }
+      }
+    };
+
+    checkPaymentConfirmation();
+  }, [isAuthenticated]);
+
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };

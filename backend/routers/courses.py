@@ -8,7 +8,7 @@ from backend.schemas import (
     CourseListResponse, CourseDetailResponse, CourseCreate, CourseUpdate,
     SectionCreate, LessonCreate, ReviewCreate, ReviewResponse
 )
-from backend.auth import require_admin, get_optional_current_user
+from backend.auth import require_admin, get_optional_current_user, get_current_user
 
 router = APIRouter(prefix="/courses", tags=["Courses"])
 
@@ -62,29 +62,59 @@ def get_courses(
 
 
 @router.get("/{course_id}", response_model=CourseDetailResponse)
-def get_course_detail(course_id: str, db: Session = Depends(get_db)):
+def get_course_detail(course_id: str, current_user: Optional[User] = Depends(get_optional_current_user), db: Session = Depends(get_db)):
     course = db.query(Course).filter(Course.id == course_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
     
+    # Calculate if the requesting user has active access to this course (enrolled, admin, or instructor)
+    is_authorized_for_content = False
+    if current_user:
+        from backend.models import Enrollment
+        enrollment = db.query(Enrollment).filter(
+            Enrollment.user_id == current_user.id,
+            Enrollment.course_id == course_id,
+            Enrollment.status == "active"
+        ).first()
+        is_authorized_for_content = bool(enrollment) or (current_user.role in ["admin", "instructor"])
+
     # Calculate curriculum format
     sections = db.query(Section).filter(Section.course_id == course_id).order_index_asc() if hasattr(Section, 'order_index_asc') else db.query(Section).filter(Section.course_id == course_id).order_by(Section.order_index).all()
     reviews = db.query(Review).filter(Review.course_id == course_id).order_by(Review.created_at.desc()).all()
 
-    # Calculate lessons count
-    total_lessons = sum(len(sec.lessons) for sec in sections)
+    # Bulk fetch all lessons in a single query to prevent N+1 query loops
+    section_ids = [s.id for s in sections]
+    all_lessons = db.query(Lesson).filter(Lesson.section_id.in_(section_ids)).order_by(Lesson.order_index).all() if section_ids else []
+
+    # Map lessons by section_id and redact video URLs if unauthorized
+    lessons_by_section = {}
+    for l in all_lessons:
+        # Redact the video URL for paid non-preview lessons if the user is not enrolled
+        video_url = l.video_url if (is_authorized_for_content or l.is_preview) else ""
+        
+        lesson_data = {
+            "id": l.id,
+            "section_id": l.section_id,
+            "title": l.title,
+            "duration": l.duration,
+            "video_url": video_url,
+            "is_preview": l.is_preview,
+            "order_index": l.order_index
+        }
+        lessons_by_section.setdefault(l.section_id, []).append(lesson_data)
+
+    total_lessons = len(all_lessons)
     course.lessons_count = total_lessons
 
     curriculum_res = []
     for sec in sections:
-        lessons = db.query(Lesson).filter(Lesson.section_id == sec.id).order_by(Lesson.order_index).all()
         curriculum_res.append({
             "id": sec.id,
             "section_title": sec.section_title,
             "duration": sec.duration,
             "order_index": sec.order_index,
             "course_id": sec.course_id,
-            "lessons": lessons
+            "lessons": lessons_by_section.get(sec.id, [])
         })
 
     return {
@@ -193,15 +223,27 @@ def delete_course(course_id: str, admin_user: User = Depends(require_admin), db:
 
 
 @router.post("/{course_id}/reviews", response_model=ReviewResponse)
-def add_review(course_id: str, review_in: ReviewCreate, current_user: User = Depends(get_optional_current_user), db: Session = Depends(get_db)):
+def add_review(course_id: str, review_in: ReviewCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     course = db.query(Course).filter(Course.id == course_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
     
-    user_name = current_user.full_name if current_user else "Anonymous Student"
+    # Require active enrollment to submit a review (prevent rating spam)
+    from backend.models import Enrollment
+    enrollment = db.query(Enrollment).filter(
+        Enrollment.user_id == current_user.id,
+        Enrollment.course_id == course_id,
+        Enrollment.status == "active"
+    ).first()
+    if not enrollment and current_user.role not in ["admin", "instructor"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You must be enrolled in this course to leave a review."
+        )
+
     review = Review(
         course_id=course_id,
-        user_name=user_name,
+        user_name=current_user.full_name,
         rating=review_in.rating,
         comment=review_in.comment,
         date="Just now"

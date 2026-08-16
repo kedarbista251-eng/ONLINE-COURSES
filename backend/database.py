@@ -31,12 +31,23 @@ def _build_engine(db_url: str):
 def _get_engine():
     primary_url = settings.DATABASE_URL
 
+    # Normalize postgres:// to postgresql:// for SQLAlchemy compatibility
+    if primary_url.startswith("postgres://"):
+        primary_url = primary_url.replace("postgres://", "postgresql://", 1)
+
     # Always try primary URL first (Supabase / PostgreSQL)
     if not primary_url.startswith("sqlite"):
         eng = _build_engine(primary_url)
         if eng is not None:
             logger.info("✅ Connected to primary database: %s", primary_url.split("@")[-1])
             return eng, primary_url
+        
+        # If we are in production, DO NOT fall back to SQLite to prevent silent data loss!
+        if settings.APP_ENV == "production":
+            raise RuntimeError(
+                f"FATAL: Database connection failed for primary database URL (Supabase/PostgreSQL). "
+                f"SQLite fallback is disabled in production to prevent silent data loss."
+            )
         logger.warning("⚠️  Primary database unreachable. Falling back to SQLite.")
 
     # Fallback to SQLite for local development / offline mode

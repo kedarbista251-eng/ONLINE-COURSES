@@ -20,6 +20,33 @@ def generate_certificate(course_id: str, current_user: User = Depends(get_curren
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
+    # 1. Enforce that the user is actually enrolled in this course
+    from backend.models import Enrollment
+    enrollment = db.query(Enrollment).filter(
+        Enrollment.user_id == current_user.id,
+        Enrollment.course_id == course_id,
+        Enrollment.status == "active"
+    ).first()
+    if not enrollment and current_user.role not in ["admin", "instructor"]:
+        raise HTTPException(status_code=403, detail="You must be enrolled in this course to generate a certificate.")
+
+    # 2. Check course completion progress (must have completed all lessons)
+    sections = db.query(Section).filter(Section.course_id == course_id).all()
+    section_ids = [s.id for s in sections]
+    total_lessons = db.query(Lesson).filter(Lesson.section_id.in_(section_ids)).count() if section_ids else 0
+
+    completed_count = db.query(Progress).filter(
+        Progress.user_id == current_user.id,
+        Progress.course_id == course_id,
+        Progress.completed == True
+    ).count()
+
+    if total_lessons == 0 or completed_count < total_lessons:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Course incomplete ({completed_count}/{total_lessons} lessons completed). You must complete 100% of the lessons to generate a certificate."
+        )
+
     existing_cert = db.query(Certificate).filter(
         Certificate.user_id == current_user.id,
         Certificate.course_id == course_id

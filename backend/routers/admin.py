@@ -1,23 +1,23 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from backend.database import get_db
 from backend.models import Course, Enrollment, User, Instructor
 from backend.schemas import AdminStatsResponse, InstructorCreate, InstructorResponse
-from backend.auth import require_admin
+from backend.auth import require_super_admin
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 @router.get("/stats", response_model=AdminStatsResponse)
-def get_admin_stats(admin_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+def get_admin_stats(admin_user: User = Depends(require_super_admin), db: Session = Depends(get_db)):
     total_courses = db.query(Course).count()
     total_students = db.query(User).filter(User.role == "student").count()
     total_enrollments = db.query(Enrollment).count()
     total_instructors = db.query(Instructor).count()
     
-    # Calculate revenue sum from courses of enrolled students
-    enrollments = db.query(Enrollment).all()
-    total_revenue = sum(e.course.price for e in enrollments if e.course and e.course.price)
+    # Calculate revenue sum directly in the database using join and sum function (prevents loading all records and N+1 queries)
+    total_revenue = db.query(func.sum(Course.price)).join(Enrollment, Enrollment.course_id == Course.id).scalar() or 0.0
 
     return AdminStatsResponse(
         total_courses=total_courses,
@@ -32,7 +32,7 @@ def get_instructors(db: Session = Depends(get_db)):
     return db.query(Instructor).all()
 
 @router.post("/instructors", response_model=InstructorResponse, status_code=status.HTTP_201_CREATED)
-def create_instructor(data: InstructorCreate, admin_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+def create_instructor(data: InstructorCreate, admin_user: User = Depends(require_super_admin), db: Session = Depends(get_db)):
     instructor = Instructor(
         name=data.name,
         title=data.title,
