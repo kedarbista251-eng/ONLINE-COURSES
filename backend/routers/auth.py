@@ -16,14 +16,8 @@ def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
             detail="Email address is already registered"
         )
 
-    requested_role = (user_data.role or "student").lower()
-    if requested_role == "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role cannot be assigned during self-registration"
-        )
-
-    safe_role = requested_role if requested_role in {"student", "instructor"} else "student"
+    # For open registration, force role to student.
+    safe_role = "student"
 
     hashed_pwd = hash_password(user_data.password)
     new_user = User(

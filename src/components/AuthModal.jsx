@@ -18,6 +18,14 @@ export default function AuthModal({ isOpen, onClose, defaultTab = 'login' }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    // Strict email validation
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -130,19 +138,7 @@ export default function AuthModal({ isOpen, onClose, defaultTab = 'login' }) {
             </div>
           </div>
 
-          {tab === 'register' && (
-            <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.4rem' }}>Account Role</label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                style={{ width: '100%', padding: '0.65rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-color)' }}
-              >
-                <option value="student">Student Account</option>
-                <option value="instructor">Instructor / Admin Account</option>
-              </select>
-            </div>
-          )}
+
 
           <button
             type="submit"
