@@ -14,6 +14,17 @@ import {
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
+// Helper to parse YouTube URLs and convert them to embed format
+const getYouTubeEmbedUrl = (url) => {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  if (match && match[2].length === 11) {
+    return `https://www.youtube.com/embed/${match[2]}?autoplay=1`;
+  }
+  return null;
+};
+
 export default function LessonPlayer({ courseId, initialLessonId, onBack, onOpenCertificate }) {
   const [course, setCourse] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -185,16 +196,34 @@ export default function LessonPlayer({ courseId, initialLessonId, onBack, onOpen
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', height: 'calc(100vh - 60px)' }}>
         {/* Left Column: Video & Tabs */}
         <div style={{ display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-          {/* HD Video Player */}
+          {/* HD Video Player — supports YouTube URLs & direct .mp4 links */}
           <div style={{ background: '#000', width: '100%', aspectRatio: '16/9', maxHeight: '520px', position: 'relative' }}>
-            <video 
-              key={currentLesson.id}
-              src={currentLesson.video_url} 
-              controls 
-              autoPlay 
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-            />
+            {(() => {
+              const youtubeEmbed = getYouTubeEmbedUrl(currentLesson.video_url);
+              if (youtubeEmbed) {
+                return (
+                  <iframe
+                    key={currentLesson.id}
+                    src={youtubeEmbed}
+                    title={currentLesson.title}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    style={{ width: '100%', height: '100%', border: 'none' }}
+                  />
+                );
+              }
+              return (
+                <video
+                  key={currentLesson.id}
+                  src={currentLesson.video_url}
+                  controls
+                  autoPlay
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                />
+              );
+            })()}
           </div>
+
 
           {/* Lesson Details & Actions Bar */}
           <div style={{ padding: '1.25rem 1.5rem', background: '#0d121f', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
